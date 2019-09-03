@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h" 
+#include <time.h>
 
 // the .h file defines all windows socket functions 
 
@@ -40,6 +41,9 @@ public:
 	// host (e.g., "www.google.com" or "132.145.2.1"), return its corresponding IP address of type DWORD
 	DWORD getIPaddress(string host)
 	{
+		clock_t timer = clock();
+		cout << "	Doing DNS... ";
+
 		struct sockaddr_in server; // structure for connecting to server
 		struct hostent *remote;    // structure used in DNS lookups: convert host name into IP address
 
@@ -58,13 +62,21 @@ public:
 				IP = server.sin_addr.S_un.S_addr;
 			}
 		}
-		//	printf("Server %s (IP: %s)\n", host.c_str(), inet_ntoa(server.sin_addr));  // for debugging purpose
+		//printf("Server %s (IP: %s)\n", host.c_str(), inet_ntoa(server.sin_addr));  // for debugging purpose
+
+		timer = clock() - timer;
+
+		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms, found " << host.c_str() << endl;
+
 		return IP;
 	}
 
 	// host IP address in binary version, port: 2-byte short
 	int connectToServerIP(DWORD IP, short port)
 	{
+		clock_t timer = clock();
+		cout << "      * Connecting on page... ";
+
 		if (IP == INADDR_NONE)
 		{
 			printf("Invalid IP address\n");
@@ -79,27 +91,94 @@ public:
 
 		if (connect(sock, (struct sockaddr*) &server, sizeof(struct sockaddr_in)) == SOCKET_ERROR)
 		{
-			printf("Connection error: %d\n", WSAGetLastError());
+			printf("failed with %d\n", WSAGetLastError());
 			return 1;
 		}
-		printf("Successfully connected to %s on port %d\n", inet_ntoa(server.sin_addr), htons(server.sin_port));
+		//printf("Successfully connected to %s on port %d\n", inet_ntoa(server.sin_addr), htons(server.sin_port));
+
+		timer = clock() - timer;
+
+		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms" << endl;
 
 		return 0;
 	}
 
 	// define your sendRequest(...) function, to send a HEAD or GET request
+	bool sendRequest(string & request) {
+		if (send(sock, request.c_str(), request.length(), 0) == SOCKET_ERROR) {
+			printf("send () error - %d\n", WSAGetLastError());
+			return false;
+		}
+		//printf("send successful\n");
+		return true;
+	}
 
 	// define your receive(...) function, to receive the reply from the server
+	bool receive(string & reply) {
+
+		clock_t timer = clock();
+		cout << "	Loading... ";
+
+		FD_SET Reader;
+		FD_ZERO(&Reader);
+		FD_SET(sock, &Reader);
+
+		struct timeval timeout;
+		timeout.tv_sec = 20000;
+		timeout.tv_usec = 0;
+
+		int bufSize = 1024;		
+		int bytes = 0;
+		int byteCount = 0;
+		char* recvBuf = new char[bufSize];
+
+		do {
+			if (select(0, &Reader, NULL, NULL, &timeout) > 0) {
+				if ((bytes = recv(sock, recvBuf, bufSize, 0)) == SOCKET_ERROR) {
+					printf("failed with %d on recv\n", WSAGetLastError());
+					return false;
+				}
+				else if (bytes > 0) {
+					byteCount += bytes;
+					recvBuf[bytes] = 0;
+					reply += recvBuf;
+				}		
+			}
+			else {
+				// timed out on select()
+				cout << "timed out" << endl;
+				return false;
+			}
+		} while (bytes > 0);
+
+		timer = clock() - timer;
+
+		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms with " << byteCount <<" bytes" << endl;
+
+		cout << "	Verifying header... status code " << parseStatusCode(reply) << endl;
+
+		return true;
+	}
 
 	void closeSocket(void)
 	{
 		closesocket(sock);
 	}
 
-
-
 private:
 	SOCKET sock;
+
+	string parseStatusCode(string reply) {
+		string statusCode = "";
+
+		string tempStr = reply;
+
+		tempStr = tempStr.erase(0, 9);
+
+		statusCode = tempStr.substr(0, 3);
+
+		return statusCode;
+	}
 
 	// define other private variables if needed
 

@@ -18,25 +18,63 @@ int main(int argc, char* argv[])
 	Winsock::initialize();	// initialize 
 
 	// parse url to get host name, port, path, and so on.
-	string url = "https://www.udayton.edu/apply/index.php";
+	//string url = "https://www.udayton.edu/apply/index.php?bruh.php";
+	//string url = "https://yahoo.com";
+
+	if (argc < 3) {
+		printf("usage: Assignment1.exe [url]\n");
+		printf(".....press any enter to exit.....\n");
+		getchar();
+		exit(1);
+	}
+
+	string url = argv[2];
+	if ((url.find("https") != string::npos)){
+		printf("invalid scheme: http requests");
+		printf(".....press any enter to exit.....\n");
+		getchar();
+		exit(2);
+	}
+
 	URLParser parser(url);
 	string host0 = parser.getHost();
+	string path0 = parser.getPath();
+	string query0 = parser.getQuery();
+	short port0 = parser.getPort();
+	short port = 80;
+
+	if (port0 == 0) {
+		port0 = port;
+	}
+
+	cout << "URL: " << url << endl;
+	cout << "	Parsing URL... host " << host0 << ", port " << port0 << ", request " << path0 << query0 << endl;	
 
 	// the following shows how to use winsock functions
 
 	Winsock ws;
 	string host = "www.google.com";
-	short port = 80;
+
+	string request = "GET " + path0 + query0 + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + host0 + "\nConnection: close" + "\n\n";
+
+	string reply = "";
 
 	/* ------------ You may create many sockets, one for each URL ------------- */
 	ws.createTCPSocket();
-	DWORD ip = ws.getIPaddress(host);
+	DWORD ip = ws.getIPaddress(host0);
 	ws.connectToServerIP(ip, port);
 	// Your task: send a request from your computer
-	// Your task: receive a reply from the server
+	if (ws.sendRequest(request)){
+		// Your task: receive a reply from the server
+		ws.receive(reply);
+		cout << "\n-----------------------------\nrecieved: \n" << reply;
+	}
+
 	ws.closeSocket();
 
 	printf("-----------------\n");
+
+	/*
 
 	// thread handles are stored here; they can be used to check status of threads, or kill them
 	HANDLE *ptrs = new HANDLE[THREAD_COUNT];
@@ -75,7 +113,8 @@ int main(int argc, char* argv[])
 		printf("%d thread finished. main() function there--------------\n", i);
 	}
 	printf("Terminating main(), completion time %d ms\n", timeGetTime() - t);
-
+	
+	*/
 
 
 
