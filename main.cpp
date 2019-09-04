@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
 	string host = "www.google.com";
 
 	string getRequest = "GET " + path0 + query0 + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + host0 + "\nConnection: close" + "\n\n";
-	string headRequest = "HEAD " + path0 + query0 + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + host0 + "\nConnection: close" + "\n\n";
+	string headRequest = "HEAD /robots.txt HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + host0 + "\nConnection: close" + "\n\n";
 
 	string reply = "";
 	string reply2 = "";
@@ -66,7 +66,7 @@ int main(int argc, char* argv[])
 	DWORD ip = ws.getIPaddress(host0);
 	ws.connectToServerIP(ip, port);
 	// Your task: send a request from your computer
-	if (ws.sendRequest(getRequest)){
+	if (ws.sendRequest(headRequest)){
 		// Your task: receive a reply from the server
 		ws.receive(reply);
 		if (ws.parseStatusCode(reply) == "200") {
@@ -74,10 +74,10 @@ int main(int argc, char* argv[])
 			cout << "\n-----------------------------\nrecieved: \n" << reply;
 		}
 		else {
-			cout << "Status Code Not 200: Attempting HEAD request" << endl;
+			cout << "Status Code Not 200: Attempting GET request" << endl;
 			ws2.createTCPSocket();
 			ws2.connectToServerIP(ip, port);
-			if (ws2.sendRequest(headRequest)) {
+			if (ws2.sendRequest(getRequest)) {
 				ws2.receive(reply2);
 				cout << "\n-----------------------------\nrecieved: \n" << reply2;
 			}
