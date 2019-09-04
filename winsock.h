@@ -165,9 +165,7 @@ public:
 		closesocket(sock);
 	}
 
-private:
-	SOCKET sock;
-
+	//parse for Status Code
 	string parseStatusCode(string reply) {
 		string statusCode = "";
 
@@ -179,6 +177,11 @@ private:
 
 		return statusCode;
 	}
+
+private:
+	SOCKET sock;
+
+	
 
 	// define other private variables if needed
 

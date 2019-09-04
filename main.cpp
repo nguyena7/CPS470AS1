@@ -52,22 +52,36 @@ int main(int argc, char* argv[])
 
 	// the following shows how to use winsock functions
 
-	Winsock ws;
+	Winsock ws, ws2;
 	string host = "www.google.com";
 
-	string request = "GET " + path0 + query0 + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + host0 + "\nConnection: close" + "\n\n";
+	string getRequest = "GET " + path0 + query0 + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + host0 + "\nConnection: close" + "\n\n";
+	string headRequest = "HEAD " + path0 + query0 + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + host0 + "\nConnection: close" + "\n\n";
 
 	string reply = "";
+	string reply2 = "";
 
 	/* ------------ You may create many sockets, one for each URL ------------- */
 	ws.createTCPSocket();
 	DWORD ip = ws.getIPaddress(host0);
 	ws.connectToServerIP(ip, port);
 	// Your task: send a request from your computer
-	if (ws.sendRequest(request)){
+	if (ws.sendRequest(getRequest)){
 		// Your task: receive a reply from the server
 		ws.receive(reply);
-		cout << "\n-----------------------------\nrecieved: \n" << reply;
+		if (ws.parseStatusCode(reply) == "200") {
+			cout << "Status Code: 200" << endl;
+			cout << "\n-----------------------------\nrecieved: \n" << reply;
+		}
+		else {
+			cout << "Status Code Not 200: Attempting HEAD request" << endl;
+			ws2.createTCPSocket();
+			ws2.connectToServerIP(ip, port);
+			if (ws2.sendRequest(headRequest)) {
+				ws2.receive(reply2);
+				cout << "\n-----------------------------\nrecieved: \n" << reply2;
+			}
+		}	
 	}
 
 	ws.closeSocket();
