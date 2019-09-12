@@ -4,7 +4,7 @@
 #include "urlparser.h"
 #include "winsock.h"
 
-int connectDownloadVerify(Winsock ws, DWORD ip, string url, bool header, string & reply);
+int connectDownloadVerify(Winsock ws, DWORD ip, URLParser parser, bool header, string & reply);
 int parseStatusCode(string reply);
 
 // this class is passed to all threads, acts as shared memory
@@ -58,7 +58,8 @@ static UINT thread(LPVOID pParam)
 			cout << "URL: " << url << endl;
 			ReleaseMutex(p->mutex);		// return mutex
 			// ------------- left the critical section ------------------		
-			URLParser parser(url);
+			URLParser parser;
+			parser.parse(url);
 			host = parser.getHost();
 			path = parser.getPath();
 			query = parser.getQuery();
@@ -92,7 +93,7 @@ static UINT thread(LPVOID pParam)
 			}
 			if (ipUnique) {
 				ws.createTCPSocket();
- 				statusCode = connectDownloadVerify(ws, ip, url, true, reply);
+ 				statusCode = connectDownloadVerify(ws, ip, parser, true, reply);
 				if (statusCode == -1) {
 					cout << "	Failed Verification" << endl;
 					continue;
@@ -100,7 +101,7 @@ static UINT thread(LPVOID pParam)
 				ws.closeSocket();
 				if (statusCode / 100 != 2) {
 					ws.createTCPSocket();
-					statusCode = connectDownloadVerify(ws, ip, url, false, reply);
+					statusCode = connectDownloadVerify(ws, ip, parser, false, reply);
 					if (statusCode == -1) {
 						cout << "	Failed Verification" << endl;
 						continue;
@@ -126,25 +127,25 @@ static UINT thread(LPVOID pParam)
 	return 0;
 }
 
-int connectDownloadVerify(Winsock ws, DWORD ip, string url, bool header, string & reply) {
-	URLParser parser(url);
+int connectDownloadVerify(Winsock ws, DWORD ip, URLParser p, bool header, string & reply) {
 	int statCode = 0;
 
 	string request = "";
 	if (header) {
-		request = "HEAD /robots.txt HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + parser.getHost() + "\nConnection: close" + "\n\n";
+		request = "HEAD /robots.txt HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + p.getHost() + "\nConnection: close" + "\n\n";
 		cout << "	Connecting on robots...";
 	}
 	else {
-		request = "GET " + parser.getPath() + parser.getQuery() + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + parser.getHost() + "\nConnection: close" + "\n\n";
+		request = "GET " + p.getPath() + p.getQuery() + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + p.getHost() + "\nConnection: close" + "\n\n";
 		cout << "	Connecting on page...";
 	}
 
-	ws.connectToServerIP(ip, parser.getPort());
+	ws.connectToServerIP(ip, p.getPort());
 
 	if (ws.sendRequest(request)) {
 		if (ws.receive(reply)) {
-			statCode = ws.parseStatusCode(reply);
+			statCode = parseStatusCode(reply);
+			cout << "	Verifying header... status code " << statCode << endl;
 		}
 		else {
 			return -1;
@@ -155,3 +156,18 @@ int connectDownloadVerify(Winsock ws, DWORD ip, string url, bool header, string 
 	}
 	return statCode;
 }
+
+//parse for Status Code
+int parseStatusCode(string reply) {
+	string statusCode = "";
+	int intStatusCode = 0;
+
+	string tempStr = reply;
+
+	tempStr = tempStr.erase(0, 9);
+
+	statusCode = tempStr.substr(0, 3);
+	intStatusCode = stoi(statusCode);
+	return intStatusCode;
+}
+

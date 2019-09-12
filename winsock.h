@@ -151,28 +151,12 @@ public:
 
 		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms with " << byteCount <<" bytes" << endl;
 
-		cout << "	Verifying header... status code " << parseStatusCode(reply) << endl;
-
 		return true;
 	}
 
 	void closeSocket(void)
 	{
 		closesocket(sock);
-	}
-
-	//parse for Status Code
-	int parseStatusCode(string reply) {
-		string statusCode = "";
-		int intStatusCode = 0;
-
-		string tempStr = reply;
-
-		tempStr = tempStr.erase(0, 9);
-
-		statusCode = tempStr.substr(0, 3);
-		intStatusCode = stoi(statusCode);
-		return intStatusCode;
 	}
 
 private:
