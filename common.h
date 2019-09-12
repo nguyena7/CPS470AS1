@@ -4,16 +4,20 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS  // for inet_addr(), gethostbyname() in winsock.h
 
 #include <winsock2.h>
+#include <winsock.h>
 #include <windows.h>
 
 #include <stdio.h>  // for printf
 #include <iostream> // for cin, cout
 #include <string>
 #include <unordered_set>  // this is Hash Table, used to check ip/host uniqueness
+#include <queue> 
+#include <fstream>
+#include <filesystem>
 
 
 using namespace std;   // if need std
 
 
-#define THREAD_COUNT	5			// number of threads created in main
+//#define THREAD_COUNT	5			// number of threads created in main
 #define MAX_SEM_COUNT	10000000	// the maximum queue size

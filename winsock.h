@@ -2,6 +2,7 @@
 #include "common.h" 
 #include <time.h>
 
+
 // the .h file defines all windows socket functions 
 
 class Winsock
@@ -66,7 +67,7 @@ public:
 
 		timer = clock() - timer;
 
-		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms, found " << host.c_str() << endl;
+		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms, found " << inet_ntoa(server.sin_addr) << endl;
 
 		return IP;
 	}
@@ -75,7 +76,6 @@ public:
 	int connectToServerIP(DWORD IP, short port)
 	{
 		clock_t timer = clock();
-		cout << "      * Connecting on page... ";
 
 		if (IP == INADDR_NONE)
 		{
@@ -95,11 +95,8 @@ public:
 			return 1;
 		}
 		//printf("Successfully connected to %s on port %d\n", inet_ntoa(server.sin_addr), htons(server.sin_port));
-
 		timer = clock() - timer;
-
 		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms" << endl;
-
 		return 0;
 	}
 
@@ -109,7 +106,6 @@ public:
 			printf("send () error - %d\n", WSAGetLastError());
 			return false;
 		}
-		//printf("send successful\n");
 		return true;
 	}
 
@@ -124,7 +120,7 @@ public:
 		FD_SET(sock, &Reader);
 
 		struct timeval timeout;
-		timeout.tv_sec = 20000;
+		timeout.tv_sec = 10;
 		timeout.tv_usec = 0;
 
 		int bufSize = 1024;		
@@ -146,7 +142,7 @@ public:
 			}
 			else {
 				// timed out on select()
-				cout << "timed out" << endl;
+				cout << "Failed on slow download" << endl;
 				return false;
 			}
 		} while (bytes > 0);
@@ -166,22 +162,21 @@ public:
 	}
 
 	//parse for Status Code
-	string parseStatusCode(string reply) {
+	int parseStatusCode(string reply) {
 		string statusCode = "";
+		int intStatusCode = 0;
 
 		string tempStr = reply;
 
 		tempStr = tempStr.erase(0, 9);
 
 		statusCode = tempStr.substr(0, 3);
-
-		return statusCode;
+		intStatusCode = stoi(statusCode);
+		return intStatusCode;
 	}
 
 private:
 	SOCKET sock;
-
-	
 
 	// define other private variables if needed
 

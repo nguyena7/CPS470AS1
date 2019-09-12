@@ -15,7 +15,6 @@ public:
 		query = "";
 	}
 
-
 	/* url format:
 	* scheme://[user:pass@]host[:port][/path][?query][#fragment]
 	*/
@@ -67,7 +66,7 @@ public:
 		int queryPos = 0;
 
 		if ((colonPos = url.find(":"))== -1) {
-			return 0;
+			return 80;
 		}
 		if ((slashPos = url.find('/')) == -1) {
 			if ((queryPos = url.find('?')) == -1) {
@@ -81,7 +80,7 @@ public:
 			sPort = url.substr(colonPos + 1, (slashPos - colonPos) - 1);
 		}
 
-		cout << "Port: " << sPort << endl;
+		//cout << "Port: " << sPort << endl;
 
 		if (sPort.length() > 0)
 			port = atoi(sPort.c_str());  // convert substring sPort to an integer value
@@ -139,7 +138,12 @@ private:
 	string query;
 
 	void removeHTTP(string & url) {
-		url.erase(0, 7);
+		if (url.find("https://") != string::npos) {
+			url.erase(0, 8);
+		}
+		else if (url.find("http://") != string::npos) {
+			url.erase(0,7);
+		}
 	}
 
 	void removeFragment(string & url) {
