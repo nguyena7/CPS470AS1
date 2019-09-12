@@ -6,6 +6,7 @@
 
 int connectDownloadVerify(Winsock ws, DWORD ip, URLParser parser, bool header, string & reply);
 int parseStatusCode(string reply);
+void countLinks(string reply);
 
 // this class is passed to all threads, acts as shared memory
 class Parameters {
@@ -107,18 +108,10 @@ static UINT thread(LPVOID pParam)
 						continue;
 					}
 					ws.closeSocket();
+					countLinks(reply);
 				}
 			}
-			if (reply.size() > 0) {
-				cout << "	Will parse the reply later" << endl;
-			}
-				// delay here: contact a peer, send a request, and receive/parse the response 
-
-				//cout << "URL taken from shared queue: " << url << endl;
-				//Sleep(5000); // let this thread sleep for 5 seconds, just for code demonstration	
-			
-		} // end of while loop for this thread 
-			// signal that this thread is exiting
+		}
 	}
 
 	ReleaseSemaphore(p->finished, 1, NULL);
@@ -171,3 +164,18 @@ int parseStatusCode(string reply) {
 	return intStatusCode;
 }
 
+//Count links on downloaded page
+void countLinks(string reply) {
+	int linkCount = 0;
+	int position = 0;
+
+	cout << "	Parsing page... ";
+	clock_t timer = clock();
+
+	while ((position = reply.find("href", position)) != string::npos) {
+		linkCount++;
+		position += 4;
+	}
+
+	printf("done in %d ms with %d links\n", (clock() - timer)/1000, linkCount);
+}

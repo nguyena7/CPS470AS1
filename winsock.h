@@ -1,7 +1,5 @@
 #pragma once
 #include "common.h" 
-#include <time.h>
-
 
 // the .h file defines all windows socket functions 
 

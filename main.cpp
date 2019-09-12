@@ -4,11 +4,6 @@
 #include "common.h"
 #include "urlparser.h"
 
-//void update(string  & s)
-//{
-//	s = ""; 
-//}
-
 int main(int argc, char* argv[])
 {
 	Winsock::initialize();	// initialize 
