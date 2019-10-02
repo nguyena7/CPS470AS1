@@ -13,8 +13,9 @@ int main(int argc, char* argv[])
 	unordered_set <DWORD> *ipSet = new unordered_set<DWORD>();
 
 	int threadCount = atoi(argv[1]);
+	cout << threadCount << endl;
 
-	if (argc != 3 || threadCount != 1) {
+	if (argc != 3 || threadCount == 0) {
 		printf("usage: Assignment1.exe [# of threads] [txt file input]\n");
 		printf(".....press any enter to exit.....\n");
 		getchar();

@@ -108,7 +108,7 @@ public:
 	}
 
 	// define your receive(...) function, to receive the reply from the server
-	bool receive(string & reply) {
+	bool receive(string & reply, double maxDownload) {
 
 		clock_t timer = clock();
 		cout << "	Loading... ";
@@ -133,14 +133,18 @@ public:
 					return false;
 				}
 				else if (bytes > 0) {
+					if (bytes > maxDownload) {
+						cout << "Exceeded max download" << endl;
+						return false;
+					}
 					byteCount += bytes;
 					recvBuf[bytes] = 0;
 					reply += recvBuf;
-				}		
+				}	
 			}
 			else {
 				// timed out on select()
-				cout << "Failed on slow download" << endl;
+				cout << "failed on slow download" << endl;
 				return false;
 			}
 		} while (bytes > 0);

@@ -4,7 +4,7 @@
 #include "urlparser.h"
 #include "winsock.h"
 
-int connectDownloadVerify(Winsock ws, DWORD ip, URLParser parser, bool header, string & reply);
+int connectDownloadVerify(Winsock ws, DWORD ip, URLParser parser, bool header, string & reply, double maxDownloadSize);
 int parseStatusCode(string reply);
 void countLinks(string reply);
 
@@ -94,7 +94,7 @@ static UINT thread(LPVOID pParam)
 			}
 			if (ipUnique) {
 				ws.createTCPSocket();
- 				statusCode = connectDownloadVerify(ws, ip, parser, true, reply);
+ 				statusCode = connectDownloadVerify(ws, ip, parser, true, reply, 16000);
 				if (statusCode == -1) {
 					cout << "	Failed Verification" << endl;
 					continue;
@@ -102,7 +102,7 @@ static UINT thread(LPVOID pParam)
 				ws.closeSocket();
 				if (statusCode / 100 != 2) {
 					ws.createTCPSocket();
-					statusCode = connectDownloadVerify(ws, ip, parser, false, reply);
+					statusCode = connectDownloadVerify(ws, ip, parser, false, reply, 1.6e+7);
 					if (statusCode == -1) {
 						cout << "	Failed Verification" << endl;
 						continue;
@@ -120,7 +120,7 @@ static UINT thread(LPVOID pParam)
 	return 0;
 }
 
-int connectDownloadVerify(Winsock ws, DWORD ip, URLParser p, bool header, string & reply) {
+int connectDownloadVerify(Winsock ws, DWORD ip, URLParser p, bool header, string & reply, double maxDownloadSize) {
 	int statCode = 0;
 
 	string request = "";
@@ -136,7 +136,7 @@ int connectDownloadVerify(Winsock ws, DWORD ip, URLParser p, bool header, string
 	ws.connectToServerIP(ip, p.getPort());
 
 	if (ws.sendRequest(request)) {
-		if (ws.receive(reply)) {
+		if (ws.receive(reply, maxDownloadSize)) {
 			statCode = parseStatusCode(reply);
 			cout << "	Verifying header... status code " << statCode << endl;
 		}
