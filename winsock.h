@@ -30,7 +30,7 @@ public:
 	{
 		sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (sock == INVALID_SOCKET) {
-			printf("socket() error %d\n", WSAGetLastError());
+			//printf("socket() error %d\n", WSAGetLastError());
 			WSACleanup();
 			return 1;
 		}
@@ -41,7 +41,7 @@ public:
 	DWORD getIPaddress(string host)
 	{
 		clock_t timer = clock();
-		cout << "	Doing DNS... ";
+		//cout << "	Doing DNS... ";
 
 		struct sockaddr_in server; // structure for connecting to server
 		struct hostent *remote;    // structure used in DNS lookups: convert host name into IP address
@@ -52,7 +52,7 @@ public:
 		{
 			if ((remote = gethostbyname(host.c_str())) == NULL)
 			{
-				printf("Invalid host name string: not FQDN\n");
+				//printf("Invalid host name string: not FQDN\n");
 				return INADDR_NONE;  // 1 means failed
 			}
 			else // take the first IP address and copy into sin_addr
@@ -65,7 +65,7 @@ public:
 
 		timer = clock() - timer;
 
-		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms, found " << inet_ntoa(server.sin_addr) << endl;
+		//cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms, found " << inet_ntoa(server.sin_addr) << endl;
 
 		return IP;
 	}
@@ -77,7 +77,7 @@ public:
 
 		if (IP == INADDR_NONE)
 		{
-			printf("Invalid IP address\n");
+			//printf("Invalid IP address\n");
 			return 1;  // 1 means error
 		}
 		struct sockaddr_in server; // structure for connecting to server
@@ -89,19 +89,19 @@ public:
 
 		if (connect(sock, (struct sockaddr*) &server, sizeof(struct sockaddr_in)) == SOCKET_ERROR)
 		{
-			printf("failed with %d\n", WSAGetLastError());
+			//printf("failed with %d\n", WSAGetLastError());
 			return 1;
 		}
 		//printf("Successfully connected to %s on port %d\n", inet_ntoa(server.sin_addr), htons(server.sin_port));
 		timer = clock() - timer;
-		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms" << endl;
+		//cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms" << endl;
 		return 0;
 	}
 
 	// define your sendRequest(...) function, to send a HEAD or GET request
 	bool sendRequest(string & request) {
 		if (send(sock, request.c_str(), request.length(), 0) == SOCKET_ERROR) {
-			printf("send () error - %d\n", WSAGetLastError());
+			//printf("send () error - %d\n", WSAGetLastError());
 			return false;
 		}
 		return true;
@@ -111,14 +111,14 @@ public:
 	bool receive(string & reply, double maxDownload) {
 
 		clock_t timer = clock();
-		cout << "	Loading... ";
+		//cout << "	Loading... ";
 
 		FD_SET Reader;
 		FD_ZERO(&Reader);
 		FD_SET(sock, &Reader);
 
 		struct timeval timeout;
-		timeout.tv_sec = 10;
+		timeout.tv_sec = 5;
 		timeout.tv_usec = 0;
 
 		int bufSize = 1024;		
@@ -129,12 +129,12 @@ public:
 		do {
 			if (select(0, &Reader, NULL, NULL, &timeout) > 0) {
 				if ((bytes = recv(sock, recvBuf, bufSize, 0)) == SOCKET_ERROR) {
-					printf("failed with %d on recv\n", WSAGetLastError());
+					//printf("failed with %d on recv\n", WSAGetLastError());
 					return false;
 				}
 				else if (bytes > 0) {
 					if (bytes > maxDownload) {
-						cout << "Exceeded max download" << endl;
+						//cout << "Exceeded max download" << endl;
 						return false;
 					}
 					byteCount += bytes;
@@ -144,14 +144,14 @@ public:
 			}
 			else {
 				// timed out on select()
-				cout << "failed on slow download" << endl;
+				//cout << "failed on slow download" << endl;
 				return false;
 			}
 		} while (bytes > 0);
 
 		timer = clock() - timer;
 
-		cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms with " << byteCount <<" bytes" << endl;
+		//cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms with " << byteCount <<" bytes" << endl;
 
 		return true;
 	}

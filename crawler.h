@@ -6,7 +6,7 @@
 
 int connectDownloadVerify(Winsock ws, DWORD ip, URLParser parser, bool header, string & reply, double maxDownloadSize);
 int parseStatusCode(string reply);
-void countLinks(string reply);
+int countLinks(string reply);
 
 // this class is passed to all threads, acts as shared memory
 class Parameters {
@@ -19,6 +19,16 @@ public:
 	unordered_set <string> *hostSet;
 	unordered_set <DWORD> *ipSet;
 	int num_tasks;
+	int num_uniquehost;	//H
+	int num_DNSlookup;	//D
+	int num_uniqueIP;	//I
+	int num_robots;		//R
+	int num_crawled;	//C
+	int total_links;	//L
+	int extracted_url;	//E
+	int q_size;			//Q
+	int statusCodeCount[6] = {};
+	int count = 0;
 };
 
 // this function is where the thread starts
@@ -28,27 +38,52 @@ static UINT thread(LPVOID pParam)
 
 	Parameters *p = ((Parameters*)pParam);
 
-	bool ipUnique = false;
+	bool ipUnique = false, hostUnique = false;
 	string url = "", host = "", path = "", query = "", request = "", reply = "";
 	int statusCode;
 	short port = 80;
 	DWORD ip = 0;
 	Winsock ws;
+	URLParser parser;
+	int firstDigitStatusCode = 0;
+	int count_200 = 0;
+	int count_300 = 0;
+	int count_400 = 0;
+	int count_500 = 0;
+	int other_status = 0;
+	int num_H;			//H
+	int num_D;			//D
+	int num_I;			//I
+	int num_R;			//R
+	int num_C;			//C
+	int num_L;			//L
+	int num_E;			//E
+	int num_Q = 0;		//Q
 
 	HANDLE	arr[] = { p->eventQuit, p->mutex };
 	while (true)
 	{
-		if (WaitForMultipleObjects(2, arr, false, INFINITE) == WAIT_OBJECT_0) { // the eventQuit has been signaled 
+		num_H = 0;			//H
+		num_D = 0;			//D
+		num_I = 0;			//I
+		num_R = 0;			//R
+		num_C = 0;			//C
+		num_L = 0;			//L
+		num_E = 0;			//E
+		firstDigitStatusCode = 0;
+
+		/*if (WaitForMultipleObjects(2, arr, false, INFINITE) == WAIT_OBJECT_0) { // the eventQuit has been signaled 
 			cout << "event quit has been signaled" << endl;
 			break;
 		}
 		else
-		{
+		{*/
 			WaitForSingleObject(p->mutex, INFINITE);
 			
 			//cout << "signled" << endl;
 			if (p->urlQueue->empty()) {
-				SetEvent(p->eventQuit);
+				ReleaseMutex(p->mutex);
+				//SetEvent(p->eventQuit);
 				break;
 			}
 			
@@ -56,47 +91,60 @@ static UINT thread(LPVOID pParam)
 			// ------------- entered the critical section ------------------
 			url = p->urlQueue->front();
 			p->urlQueue->pop();
+			p->count++;
+			cout << "count: " << p->count << " ";
 			cout << "URL: " << url << endl;
+			num_E++; //E
+			p->extracted_url++;
+			//cout << "Extracted " << p->extracted_url << endl;
 			ReleaseMutex(p->mutex);		// return mutex
-			// ------------- left the critical section ------------------		
-			URLParser parser;
+			// ------------- left the critical section ------------------	
+
 			parser.parse(url);
 			host = parser.getHost();
 			path = parser.getPath();
 			query = parser.getQuery();
 			port = parser.getPort();
 			ipUnique = false;
+			hostUnique = false;
 			reply = "";
 
-			cout << "	Parsing URL... host " << host << ", port " << port << ", path " << path << endl;
+			//cout << "	Parsing URL... host " << host << ", port " << port << ", path " << path << endl;
 
+			//create a separate function to determine host and ip uniquness. this function will be in critical section.
 			// ----------- check for uniqueness -----------
-			cout << "	Checking host uniqueness... ";
-			if (p->hostSet->find(host) == p->hostSet->end()) {
+			//cout << "	Checking host uniqueness... ";
+			WaitForSingleObject(p->mutex, INFINITE);
+			if (p->hostSet->find(host) == p->hostSet->end()) {		
 				p->hostSet->insert(host);
-				cout << "passed" << endl;
-				ip = ws.getIPaddress(host);
+				hostUnique = true;
+				//cout << "passed" << endl;
+				num_H++; //H	
+			}
+			ReleaseMutex(p->mutex);		// return mutex
 
-				cout << "	Checking IP uniqueness... ";
-				if (p->ipSet->find(ip) == p->ipSet->end()) {
+			if (hostUnique) {
+				ip = ws.getIPaddress(host);
+				if (ip != INADDR_NONE) {
+					num_D++; //D
+				}		
+
+				WaitForSingleObject(p->mutex, INFINITE);
+				//cout << "	Checking IP uniqueness... ";
+				if (p->ipSet->find(ip) == p->ipSet->end()) {				
 					p->ipSet->insert(ip);
-					cout << "passed" << endl;
+					num_I++; //I
+					//cout << "passed" << endl;
 					ipUnique = true;
 				}
-				else { // unique IP test failed
-					cout << "failed" << endl;
-					continue;
-				}
+				ReleaseMutex(p->mutex);		// return mutex
 			}
-			else { // unique host test failed
-				cout << "failed" << endl;
-				continue;
-			}
+
 			if (ipUnique) {
 				ws.createTCPSocket();
- 				statusCode = connectDownloadVerify(ws, ip, parser, true, reply, 16000);
+				statusCode = connectDownloadVerify(ws, ip, parser, true, reply, 16000);
 				if (statusCode == -1) {
-					cout << "	Failed Verification" << endl;
+					//cout << "	Failed Verification" << endl;
 					continue;
 				}
 				ws.closeSocket();
@@ -104,14 +152,36 @@ static UINT thread(LPVOID pParam)
 					ws.createTCPSocket();
 					statusCode = connectDownloadVerify(ws, ip, parser, false, reply, 1.6e+7);
 					if (statusCode == -1) {
-						cout << "	Failed Verification" << endl;
+						//cout << "	Failed Verification" << endl;
 						continue;
 					}
 					ws.closeSocket();
-					countLinks(reply);
+					num_C++;
+					num_L = countLinks(reply);
 				}
+				else {
+					num_R++;
+				}
+				firstDigitStatusCode = statusCode / 100;
+				//cout << "statcode: " << firstDigitStatusCode << endl;
 			}
-		}
+
+			WaitForSingleObject(p->mutex, INFINITE);
+			// obtain ownership of the mutex
+			// ------------- entered the critical section ------------------
+			p->statusCodeCount[firstDigitStatusCode]++;
+			//cout << firstDigitStatusCode << ": " << p->statusCodeCount[firstDigitStatusCode] << endl;
+			p->q_size = p->urlQueue->size();
+			p->num_uniquehost += num_H;
+			p->num_DNSlookup += num_D;
+			p->num_uniqueIP += num_I;
+			p->num_robots += num_R;
+			p->num_crawled += num_C;
+			p->total_links += num_L;
+
+			ReleaseMutex(p->mutex);		// return mutex
+			// ------------- left the critical section ------------------
+		//}
 	}
 
 	ReleaseSemaphore(p->finished, 1, NULL);
@@ -120,25 +190,28 @@ static UINT thread(LPVOID pParam)
 	return 0;
 }
 
-int connectDownloadVerify(Winsock ws, DWORD ip, URLParser p, bool header, string & reply, double maxDownloadSize) {
+int connectDownloadVerify(Winsock ws, DWORD ip, URLParser parser, bool header, string & reply, double maxDownloadSize) {
 	int statCode = 0;
 
 	string request = "";
 	if (header) {
-		request = "HEAD /robots.txt HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + p.getHost() + "\nConnection: close" + "\n\n";
-		cout << "	Connecting on robots...";
+		request = "HEAD /robots.txt HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + parser.getHost() + "\nConnection: close" + "\n\n";
+		//cout << "	Connecting on robots...";
 	}
 	else {
-		request = "GET " + p.getPath() + p.getQuery() + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + p.getHost() + "\nConnection: close" + "\n\n";
-		cout << "	Connecting on page...";
+		request = "GET " + parser.getPath() + parser.getQuery() + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + parser.getHost() + "\nConnection: close" + "\n\n";
+		//cout << "	Connecting on page...";
 	}
 
-	ws.connectToServerIP(ip, p.getPort());
+	ws.connectToServerIP(ip, parser.getPort());
 
 	if (ws.sendRequest(request)) {
 		if (ws.receive(reply, maxDownloadSize)) {
 			statCode = parseStatusCode(reply);
-			cout << "	Verifying header... status code " << statCode << endl;
+			if (statCode == 0) {
+				return -1;
+			}
+			//cout << "	Verifying header... status code " << statCode << endl;
 		}
 		else {
 			return -1;
@@ -160,16 +233,24 @@ int parseStatusCode(string reply) {
 	tempStr = tempStr.erase(0, 9);
 
 	statusCode = tempStr.substr(0, 3);
-	intStatusCode = stoi(statusCode);
+
+	try {
+		intStatusCode = stoi(statusCode);
+	}
+	catch(invalid_argument){
+		//cout << "Conversion Failed, No Status Code" << endl;
+		return 0;
+	}
+	
 	return intStatusCode;
 }
 
 //Count links on downloaded page
-void countLinks(string reply) {
+int countLinks(string reply) {
 	int linkCount = 0;
 	int position = 0;
 
-	cout << "	Parsing page... ";
+	//cout << "	Parsing page... ";
 	clock_t timer = clock();
 
 	while ((position = reply.find("href", position)) != string::npos) {
@@ -177,5 +258,7 @@ void countLinks(string reply) {
 		position += 4;
 	}
 
-	printf("done in %d ms with %d links\n", (clock() - timer)/1000, linkCount);
+	//printf("done in %d ms with %d links\n", (clock() - timer)/1000, linkCount);
+	return linkCount;
 }
+

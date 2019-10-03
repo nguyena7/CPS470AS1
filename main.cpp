@@ -4,6 +4,8 @@
 #include "common.h"
 #include "urlparser.h"
 
+void printStats(Parameters p);
+
 int main(int argc, char* argv[])
 {
 	Winsock::initialize();	// initialize 
@@ -27,13 +29,19 @@ int main(int argc, char* argv[])
 	streamoff fileSize = 0;
 	ifstream file(textFile, std::ifstream::binary);
 	if (file.is_open()) {
+
+		file.seekg(0, file.end);
+		fileSize = file.tellg();
+		file.seekg(0, file.beg);
+
+		cout << "Opening File..." << endl;
 		string url;
 		while (getline(file, url)) {
-			//printf("url: %s\n", url.c_str());
-			fileSize = file.tellg();
+			//printf("url: %s\n", url.c_str());	
 			urlQueue->push(url);
 		}
-		cout << "Opened " << textFile << " with size " << fileSize << " bytes." << endl;
+
+		printf("Opened %s with size %llu bytes.\n", textFile.c_str(), (long long)fileSize);
 	}
 	else {
 		cout << "No such file." << endl;
@@ -60,7 +68,15 @@ int main(int argc, char* argv[])
 	p.hostSet = hostSet;
 	p.ipSet = ipSet;
 	p.urlQueue = urlQueue;
-
+	p.num_DNSlookup = 0;
+	p.total_links = 0;
+	p.num_robots = 0;
+	p.num_tasks = 0;
+	p.num_uniquehost = 0;
+	p.num_uniqueIP = 0;
+	p.num_crawled = 0;
+	p.extracted_url = 0;
+	p.q_size = 0;
 	// create a manual reset event to determine the termination condition is true
 	p.eventQuit = CreateEvent(NULL, true, false, NULL);
 
@@ -84,12 +100,26 @@ int main(int argc, char* argv[])
 		WaitForSingleObject(p.finished, INFINITE);
 		printf("%d thread finished. main() function there--------------\n", i);
 	}
-	printf("Terminating main(), completion time %d ms\n", timeGetTime() - t);
+	printf("Terminating main(), completion time %d s\n", (timeGetTime() - t)/1000);
+
+	printStats(p);
 
 	Winsock::cleanUp();
 
-	printf("Enter any key to continue ...\n");
-	getchar();
+	//printf("Enter any key to continue ...\n");
+	//getchar();
+
+	system("pause");
 
 	return 0;   // 0 means successful
+}
+
+void printStats(Parameters p) {
+	cout << "Extracted " << p.extracted_url << " URL @ /s"<<  endl;
+	cout << "Looked up " << p.num_DNSlookup << " DNS names @ /s" << endl;
+	cout << "Downloaded " << p.num_robots << " robots @ /s" << endl;
+	cout << "Crawled " << p.num_crawled << " pages @ /s" << endl;
+	cout << "Parsed " << p.total_links << " links @ /s" << endl;
+	cout << "HTTP codes: 2xx = " << p.statusCodeCount[2] << ", 3xx = " << p.statusCodeCount[3] << ", 4xx = " 
+		<< p.statusCodeCount[4] << ", 5xx = " << p.statusCodeCount[5] << ", other = " << p.statusCodeCount[1] << endl;
 }
