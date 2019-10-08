@@ -23,20 +23,27 @@ public:
 		// remove the line break if there is
 		int pos = url.find("\n");
 		if (pos != -1)
-			url = url.substr(0, pos);
+			url = url.substr(0, pos);	
 
 		// remove scheme, ://
 		pos = url.find("://");
 		if (pos != -1)
 			url = url.substr(pos + 3);  // keep everything after ://
+
+		/*  ----------- Web URLs don't use user:pass@ and fragment#, this was causing errors ---------
 		// remove user:pass@
 		pos = url.find("@");
 		if (pos != -1)
 			url = url.substr(pos + 1); // keep everyting after @
+		cout << "remove user:pass@ :" << url << endl;
+		
+
 		// remove #fragment
 		pos = url.find("#");
 		if (pos != -1)
 			url = url.substr(0, pos);  // remove fragment: keep everyting from index 0, span pos characters (does not include #)
+		*/
+
 		// find query
 		pos = url.find("?");
 		if (pos != -1)
@@ -44,12 +51,14 @@ public:
 			query = url.substr(pos);
 			url = url.substr(0, pos); // remove query: keep everyting from index 0, span pos characters (exclude ?)
 		}
+
 		// find path
 		pos = url.find("/");
 		if (pos != -1) {
 			path = url.substr(pos);
 			url = url.substr(0, pos);
 		}
+
 		// find port number
 		pos = url.find(":");
 		if (pos != -1) {

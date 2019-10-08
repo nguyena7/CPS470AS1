@@ -4,19 +4,18 @@
 #include "common.h"
 #include "urlparser.h"
 
-void printStats(Parameters p);
+void printStats(Parameters p, int CompletionTime);
 
 int main(int argc, char* argv[])
 {
-	Winsock::initialize();	// initialize 
 
 	queue <string> *urlQueue = new queue<string>();
 	unordered_set <string> *hostSet = new unordered_set<string>();
 	unordered_set <DWORD> *ipSet = new unordered_set<DWORD>();
+	int compTime = 0;
 
+	// --------- command line arguments ----------- //
 	int threadCount = atoi(argv[1]);
-	cout << threadCount << endl;
-
 	if (argc != 3 || threadCount == 0) {
 		printf("usage: Assignment1.exe [# of threads] [txt file input]\n");
 		printf(".....press any enter to exit.....\n");
@@ -24,8 +23,8 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
+	//----------------- Manage Input File -------------------//
 	string textFile = argv[2];
-
 	streamoff fileSize = 0;
 	ifstream file(textFile, std::ifstream::binary);
 	if (file.is_open()) {
@@ -37,7 +36,6 @@ int main(int argc, char* argv[])
 		cout << "Opening File..." << endl;
 		string url;
 		while (getline(file, url)) {
-			//printf("url: %s\n", url.c_str());	
 			urlQueue->push(url);
 		}
 
@@ -52,10 +50,13 @@ int main(int argc, char* argv[])
 
 	file.close();
 
+
+	//----------------	Thead Creation/Management	-------------------------------------//
+
 	// thread handles are stored here; they can be used to check status of threads, or kill them
 	HANDLE *ptrs = new HANDLE[threadCount];
+
 	Parameters p;
-	//int num_peers = urlQueue->size();
 
 	// create a mutex for accessing critical sections (including printf)
 	p.mutex = CreateMutex(NULL, 0, NULL);
@@ -63,30 +64,20 @@ int main(int argc, char* argv[])
 	// create a semaphore that check if a thread finishs its task
 	p.finished = CreateSemaphore(NULL, 0, threadCount, NULL);
 
-	//	p.active_threads = 0;
-	//p.num_tasks = urlQueue.size();
+	// Initialize Parameter variables
 	p.hostSet = hostSet;
 	p.ipSet = ipSet;
 	p.urlQueue = urlQueue;
-	p.num_DNSlookup = 0;
-	p.total_links = 0;
-	p.num_robots = 0;
-	p.num_tasks = 0;
-	p.num_uniquehost = 0;
-	p.num_uniqueIP = 0;
-	p.num_crawled = 0;
-	p.extracted_url = 0;
-	p.q_size = 0;
+	p.remaining_url = urlQueue->size();
+	p.thread_q = threadCount;
+
 	// create a manual reset event to determine the termination condition is true
 	p.eventQuit = CreateEvent(NULL, true, false, NULL);
-
-	// create a semaphore to keep track of the number of items in the inputQ. The initial size of inputQ is num_peers
-	//p.semaQ = CreateSemaphore(NULL, num_peers, MAX_SEM_COUNT, NULL);
 
 	// get current system time
 	DWORD t = timeGetTime();
 
-	for (int i = 0; i < threadCount; ++i)
+	for (int i = 0; i < threadCount + 1; ++i)
 	{
 		// structure p is the shared space between the threads		
 		ptrs[i] = CreateThread(NULL, 4096, (LPTHREAD_START_ROUTINE)thread, &p, 0, NULL);
@@ -94,32 +85,27 @@ int main(int argc, char* argv[])
 	printf("-----------created %d threads-----------\n", threadCount);
 
 	// make sure this main thread hangs here until the other two quit; otherwise, the program will terminate prematurely
-	
-	for (int i = 1; i <= threadCount; ++i)
+	for (int i = 1; i <= threadCount + 1; ++i)
 	{
 		WaitForSingleObject(p.finished, INFINITE);
-		printf("%d thread finished. main() function there--------------\n", i);
+		p.thread_q--;
 	}
-	printf("Terminating main(), completion time %d s\n", (timeGetTime() - t)/1000);
+	compTime = timeGetTime() - t;
+	printf("\nTerminating main(), completion time %d s\n", compTime/1000);
 
-	printStats(p);
-
-	Winsock::cleanUp();
-
-	//printf("Enter any key to continue ...\n");
-	//getchar();
+	printStats(p, compTime);
 
 	system("pause");
 
 	return 0;   // 0 means successful
 }
 
-void printStats(Parameters p) {
-	cout << "Extracted " << p.extracted_url << " URL @ /s"<<  endl;
-	cout << "Looked up " << p.num_DNSlookup << " DNS names @ /s" << endl;
-	cout << "Downloaded " << p.num_robots << " robots @ /s" << endl;
-	cout << "Crawled " << p.num_crawled << " pages @ /s" << endl;
-	cout << "Parsed " << p.total_links << " links @ /s" << endl;
+void printStats(Parameters p, int CompletionTime) {
+	printf("Extracted %d URLs @ %.2f/s\n", p.extracted_url, (p.extracted_url / ((CompletionTime) / 1000.0))); 
+	printf("Looked up %d DNS names @ %.2f/s\n", p.num_DNSlookup, (p.num_DNSlookup / ((CompletionTime) / 1000.0)));
+	printf("Downloaded %d robots @ %.2f/s\n", p.num_robots, (p.num_robots / ((CompletionTime) / 1000.0)));
+	printf("Crawled %d pages @ %.2f/s (%.2fMB) \n", p.num_crawled, (p.num_crawled / ((CompletionTime) / 1000.0)), ((p.totalsize)/1000000.0));
+	printf("Parsed %d links @ %.2f/s\n", p.total_links, (p.total_links / ((CompletionTime) / 1000.0)));
 	cout << "HTTP codes: 2xx = " << p.statusCodeCount[2] << ", 3xx = " << p.statusCodeCount[3] << ", 4xx = " 
 		<< p.statusCodeCount[4] << ", 5xx = " << p.statusCodeCount[5] << ", other = " << p.statusCodeCount[1] << endl;
 }

@@ -4,9 +4,9 @@
 #include "urlparser.h"
 #include "winsock.h"
 
-int connectDownloadVerify(Winsock ws, DWORD ip, URLParser parser, bool header, string & reply, double maxDownloadSize);
-int parseStatusCode(string reply);
-int countLinks(string reply);
+int connectDownloadVerify(Winsock ws, DWORD ip, URLParser parser, bool header, string & reply, double maxDownloadSize); // Returns size of webpage downloaded
+int parseStatusCode(string reply); //parses page reply for status code, returns 0 if failed.
+int countLinks(string reply); // parse reply for links
 
 // this class is passed to all threads, acts as shared memory
 class Parameters {
@@ -18,18 +18,24 @@ public:
 	queue <string> *urlQueue;
 	unordered_set <string> *hostSet;
 	unordered_set <DWORD> *ipSet;
-	int num_tasks;
-	int num_uniquehost;	//H
-	int num_DNSlookup;	//D
-	int num_uniqueIP;	//I
-	int num_robots;		//R
-	int num_crawled;	//C
-	int total_links;	//L
-	int extracted_url;	//E
-	int q_size;			//Q
-	int statusCodeCount[6] = {};
-	int count = 0;
+	int num_uniquehost=0;			//H
+	int num_DNSlookup=0;			//D
+	int num_uniqueIP=0;				//I
+	int num_robots=0;				//R
+	int num_crawled=0;				//C
+	int total_links=0;				//L
+	int extracted_url=0;			//E
+	int thread_q=0;					//Q
+	int statusCodeCount[6] = {};	//used to count status codes
+	double totalsize = 0;	//total size of downloaded content from webpages
+	double temp_size = 0;	//size of current pages downloaded for displaying Mbps
+	int remaining_url=0;	//remaining urls in Q
+	int countingThread = 0; // First Thread will display data every 2 seconds
+	int temp_crawled = 0;	//num of pages crawled for displaying Pages Per Second
+	
 };
+
+void displayData(Parameters *p); // first thread spawned will run this function
 
 // this function is where the thread starts
 static UINT thread(LPVOID pParam)
@@ -38,7 +44,7 @@ static UINT thread(LPVOID pParam)
 
 	Parameters *p = ((Parameters*)pParam);
 
-	bool ipUnique = false, hostUnique = false;
+	bool ipUnique, hostUnique;
 	string url = "", host = "", path = "", query = "", request = "", reply = "";
 	int statusCode;
 	short port = 80;
@@ -46,21 +52,20 @@ static UINT thread(LPVOID pParam)
 	Winsock ws;
 	URLParser parser;
 	int firstDigitStatusCode = 0;
-	int count_200 = 0;
-	int count_300 = 0;
-	int count_400 = 0;
-	int count_500 = 0;
-	int other_status = 0;
-	int num_H;			//H
-	int num_D;			//D
-	int num_I;			//I
-	int num_R;			//R
-	int num_C;			//C
-	int num_L;			//L
-	int num_E;			//E
-	int num_Q = 0;		//Q
+	int num_H, num_D, num_I, num_R, num_C, num_L, num_Q=0;					
+	double pageSize;
 
-	HANDLE	arr[] = { p->eventQuit, p->mutex };
+	//select thread for displaying data every 2 seconds
+	WaitForSingleObject(p->mutex, INFINITE);
+	if (p->countingThread == 0) {
+		p->countingThread++;
+		ReleaseMutex(p->mutex);
+		displayData(p);
+		Winsock::cleanUp();
+		return 0;
+	}
+	ReleaseMutex(p->mutex);
+
 	while (true)
 	{
 		num_H = 0;			//H
@@ -69,119 +74,102 @@ static UINT thread(LPVOID pParam)
 		num_R = 0;			//R
 		num_C = 0;			//C
 		num_L = 0;			//L
-		num_E = 0;			//E
 		firstDigitStatusCode = 0;
+		statusCode = 0;
+		pageSize = 0;
+		ipUnique = false;
+		hostUnique = false;
 
-		/*if (WaitForMultipleObjects(2, arr, false, INFINITE) == WAIT_OBJECT_0) { // the eventQuit has been signaled 
-			cout << "event quit has been signaled" << endl;
+		// obtain ownership of the mutex
+		WaitForSingleObject(p->mutex, INFINITE);
+		if (p->urlQueue->empty()) {
+			ReleaseMutex(p->mutex);
 			break;
 		}
-		else
-		{*/
-			WaitForSingleObject(p->mutex, INFINITE);
-			
-			//cout << "signled" << endl;
-			if (p->urlQueue->empty()) {
-				ReleaseMutex(p->mutex);
-				//SetEvent(p->eventQuit);
-				break;
+
+		// ------------- entered the critical section ------------------
+		url = p->urlQueue->front();
+		p->urlQueue->pop();
+		p->remaining_url--;
+		p->extracted_url++;
+		ReleaseMutex(p->mutex);		// return mutex
+		// ------------- left the critical section ------------------	
+
+		//Parse URL
+		parser.parse(url);
+		host = parser.getHost();
+		path = parser.getPath();
+		query = parser.getQuery();
+		port = parser.getPort();
+		ipUnique = false;
+		hostUnique = false;
+		reply = "";
+
+		// ----------- check for uniqueness -----------
+		WaitForSingleObject(p->mutex, INFINITE);
+		if (p->hostSet->find(host) == p->hostSet->end()) {		
+			p->hostSet->insert(host);
+			hostUnique = true;
+			num_H++;	
+		}
+		ReleaseMutex(p->mutex);		// return mutex
+
+		if (hostUnique) { //host name uniqueness
+			ip = ws.getIPaddress(host);
+			if (ip != INADDR_NONE) {
+				num_D++;
 			}
-			
-			// obtain ownership of the mutex
-			// ------------- entered the critical section ------------------
-			url = p->urlQueue->front();
-			p->urlQueue->pop();
-			p->count++;
-			cout << "count: " << p->count << " ";
-			cout << "URL: " << url << endl;
-			num_E++; //E
-			p->extracted_url++;
-			//cout << "Extracted " << p->extracted_url << endl;
-			ReleaseMutex(p->mutex);		// return mutex
-			// ------------- left the critical section ------------------	
 
-			parser.parse(url);
-			host = parser.getHost();
-			path = parser.getPath();
-			query = parser.getQuery();
-			port = parser.getPort();
-			ipUnique = false;
-			hostUnique = false;
-			reply = "";
-
-			//cout << "	Parsing URL... host " << host << ", port " << port << ", path " << path << endl;
-
-			//create a separate function to determine host and ip uniquness. this function will be in critical section.
-			// ----------- check for uniqueness -----------
-			//cout << "	Checking host uniqueness... ";
 			WaitForSingleObject(p->mutex, INFINITE);
-			if (p->hostSet->find(host) == p->hostSet->end()) {		
-				p->hostSet->insert(host);
-				hostUnique = true;
-				//cout << "passed" << endl;
-				num_H++; //H	
+			if (p->ipSet->find(ip) == p->ipSet->end()) {	 //ip uniqueness			
+				p->ipSet->insert(ip);
+				num_I++;
+				ipUnique = true;
 			}
 			ReleaseMutex(p->mutex);		// return mutex
+		}
 
-			if (hostUnique) {
-				ip = ws.getIPaddress(host);
-				if (ip != INADDR_NONE) {
-					num_D++; //D
-				}		
+		if (ipUnique) { // passed IP unique test, attempting connection
+			ws.createTCPSocket();
+			pageSize += (double) connectDownloadVerify(ws, ip, parser, true, reply, 16000); 
+			statusCode = parseStatusCode(reply);
+			ws.closeSocket();
 
-				WaitForSingleObject(p->mutex, INFINITE);
-				//cout << "	Checking IP uniqueness... ";
-				if (p->ipSet->find(ip) == p->ipSet->end()) {				
-					p->ipSet->insert(ip);
-					num_I++; //I
-					//cout << "passed" << endl;
-					ipUnique = true;
-				}
-				ReleaseMutex(p->mutex);		// return mutex
+			if (statusCode != 0) {
+				num_R++;
 			}
 
-			if (ipUnique) {
+			if (statusCode / 100 == 4) { // if robots is 4xx, crawl page
 				ws.createTCPSocket();
-				statusCode = connectDownloadVerify(ws, ip, parser, true, reply, 16000);
-				if (statusCode == -1) {
-					//cout << "	Failed Verification" << endl;
-					continue;
-				}
+				pageSize += (double) connectDownloadVerify(ws, ip, parser, false, reply, 1.6e+7);
+				statusCode = parseStatusCode(reply);
 				ws.closeSocket();
-				if (statusCode / 100 != 2) {
-					ws.createTCPSocket();
-					statusCode = connectDownloadVerify(ws, ip, parser, false, reply, 1.6e+7);
-					if (statusCode == -1) {
-						//cout << "	Failed Verification" << endl;
-						continue;
-					}
-					ws.closeSocket();
+				if (statusCode != 0) {
 					num_C++;
 					num_L = countLinks(reply);
 				}
-				else {
-					num_R++;
-				}
-				firstDigitStatusCode = statusCode / 100;
-				//cout << "statcode: " << firstDigitStatusCode << endl;
 			}
+			firstDigitStatusCode = statusCode / 100;
+		}
 
-			WaitForSingleObject(p->mutex, INFINITE);
-			// obtain ownership of the mutex
-			// ------------- entered the critical section ------------------
-			p->statusCodeCount[firstDigitStatusCode]++;
-			//cout << firstDigitStatusCode << ": " << p->statusCodeCount[firstDigitStatusCode] << endl;
-			p->q_size = p->urlQueue->size();
-			p->num_uniquehost += num_H;
-			p->num_DNSlookup += num_D;
-			p->num_uniqueIP += num_I;
-			p->num_robots += num_R;
-			p->num_crawled += num_C;
-			p->total_links += num_L;
+		
+		// ------------ Update Parameters ------------------ //
+		WaitForSingleObject(p->mutex, INFINITE);
+		// ------------- entered the critical section ------------------
+		p->statusCodeCount[firstDigitStatusCode]++;
+		p->num_uniquehost += num_H;
+		p->num_DNSlookup += num_D;
+		p->num_uniqueIP += num_I;
+		p->num_robots += num_R;
+		p->num_crawled += num_C;
+		p->total_links += num_L;
+		p->totalsize += pageSize;
+		p->temp_crawled += num_C;
+		p->temp_size += pageSize;
 
-			ReleaseMutex(p->mutex);		// return mutex
-			// ------------- left the critical section ------------------
-		//}
+		ReleaseMutex(p->mutex);		// return mutex
+		// ------------- left the critical section ------------------
+
 	}
 
 	ReleaseSemaphore(p->finished, 1, NULL);
@@ -191,39 +179,23 @@ static UINT thread(LPVOID pParam)
 }
 
 int connectDownloadVerify(Winsock ws, DWORD ip, URLParser parser, bool header, string & reply, double maxDownloadSize) {
-	int statCode = 0;
+	int pageSize = 0;
 
 	string request = "";
-	if (header) {
-		request = "HEAD /robots.txt HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + parser.getHost() + "\nConnection: close" + "\n\n";
-		//cout << "	Connecting on robots...";
+	if (header) { // header = true will send a head request
+		request = "HEAD /robots.txt HTTP/1.0\nUser-agent: UDCScrawler/1.0\nHost: " + parser.getHost() + "\nConnection: close" + "\n\n";
 	}
 	else {
-		request = "GET " + parser.getPath() + parser.getQuery() + " HTTP/1.1\nUser-agent: UDCScrawler/1.0\nHost: " + parser.getHost() + "\nConnection: close" + "\n\n";
-		//cout << "	Connecting on page...";
+		request = "GET " + parser.getPath() + parser.getQuery() + " HTTP/1.0\nUser-agent: UDCScrawler/1.0\nHost: " + parser.getHost() + "\nConnection: close" + "\n\n";
 	}
 
 	ws.connectToServerIP(ip, parser.getPort());
 
 	if (ws.sendRequest(request)) {
-		if (ws.receive(reply, maxDownloadSize)) {
-			statCode = parseStatusCode(reply);
-			if (statCode == 0) {
-				return -1;
-			}
-			//cout << "	Verifying header... status code " << statCode << endl;
-		}
-		else {
-			return -1;
-		}
+		pageSize = ws.receive(reply, maxDownloadSize);
 	}
-	else {
-		return -1;
-	}
-	return statCode;
+	return pageSize;
 }
-
-//parse for Status Code
 int parseStatusCode(string reply) {
 	string statusCode = "";
 	int intStatusCode = 0;
@@ -238,8 +210,7 @@ int parseStatusCode(string reply) {
 		intStatusCode = stoi(statusCode);
 	}
 	catch(invalid_argument){
-		//cout << "Conversion Failed, No Status Code" << endl;
-		return 0;
+		return 0; // failed to convert status code
 	}
 	
 	return intStatusCode;
@@ -250,7 +221,6 @@ int countLinks(string reply) {
 	int linkCount = 0;
 	int position = 0;
 
-	//cout << "	Parsing page... ";
 	clock_t timer = clock();
 
 	while ((position = reply.find("href", position)) != string::npos) {
@@ -258,7 +228,44 @@ int countLinks(string reply) {
 		position += 4;
 	}
 
-	//printf("done in %d ms with %d links\n", (clock() - timer)/1000, linkCount);
 	return linkCount;
 }
 
+void displayData(Parameters *p) { // the first thread that runs will display data every two seconds
+	int num_Q = 0, num_E = 0, num_H = 0, num_D = 0, num_I = 0, num_R = 0, num_C = 0, num_L = 0, timer = 0, completedTime = 0, num_threads = 0;
+	double pageSize = 0;
+	while (true) {
+		DWORD t = timeGetTime();
+		if (p->thread_q == 0) {
+			ReleaseSemaphore(p->finished, 1, NULL);
+			break;
+		}
+
+		Sleep(2000);
+
+		WaitForSingleObject(p->mutex, INFINITE);
+
+		num_threads = p->thread_q;
+		num_Q = p->urlQueue->size();
+		num_E = p->extracted_url;
+		num_H = p->num_uniquehost;
+		num_D = p->num_DNSlookup;
+		num_I = p->num_uniqueIP;
+		num_R = p->num_robots;
+		num_C = p->num_crawled;
+		num_L = p->total_links;
+
+		if (num_Q == -1)
+			num_Q = 0;
+
+		completedTime = timeGetTime() - t;
+		timer += 2;
+		printf("[%d] %d	Q %d	E %d	H %d	D %d	I %d	R %d	C %d	L %dk\n", timer, num_threads, num_Q, num_E, num_H, num_D, num_I, num_R, num_C, num_L/1000);
+		printf("	*** crawling %.1f pps @ %.1f Mbps\n", p->temp_crawled / (completedTime / 1000.0), ((((p->temp_size))*8)/100000) / (completedTime / 1000.0));
+
+		p->temp_crawled = 0;
+		p->temp_size = 0;
+
+		ReleaseMutex(p->mutex);
+	}
+}

@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h" 
+#include "crawler.h"
 
 // the .h file defines all windows socket functions 
 
@@ -108,7 +109,7 @@ public:
 	}
 
 	// define your receive(...) function, to receive the reply from the server
-	bool receive(string & reply, double maxDownload) {
+	int receive(string & reply, double maxDownload) {
 
 		clock_t timer = clock();
 		//cout << "	Loading... ";
@@ -118,7 +119,7 @@ public:
 		FD_SET(sock, &Reader);
 
 		struct timeval timeout;
-		timeout.tv_sec = 5;
+		timeout.tv_sec = 10;
 		timeout.tv_usec = 0;
 
 		int bufSize = 1024;		
@@ -130,12 +131,12 @@ public:
 			if (select(0, &Reader, NULL, NULL, &timeout) > 0) {
 				if ((bytes = recv(sock, recvBuf, bufSize, 0)) == SOCKET_ERROR) {
 					//printf("failed with %d on recv\n", WSAGetLastError());
-					return false;
+					return 0;
 				}
 				else if (bytes > 0) {
 					if (bytes > maxDownload) {
 						//cout << "Exceeded max download" << endl;
-						return false;
+						return 0;
 					}
 					byteCount += bytes;
 					recvBuf[bytes] = 0;
@@ -145,7 +146,7 @@ public:
 			else {
 				// timed out on select()
 				//cout << "failed on slow download" << endl;
-				return false;
+				return 0;
 			}
 		} while (bytes > 0);
 
@@ -153,7 +154,7 @@ public:
 
 		//cout << "done in " << (((float)timer) / CLOCKS_PER_SEC) * 1000.0 << "ms with " << byteCount <<" bytes" << endl;
 
-		return true;
+		return byteCount;
 	}
 
 	void closeSocket(void)
